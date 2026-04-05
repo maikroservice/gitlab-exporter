@@ -13,15 +13,17 @@ setup() {
 
   cat > "$_MAP" <<'EOF'
 [
-  {"pattern": "/api/v4/projects/12345/wikis",          "fixture": "wiki_pages.json",           "status": 200},
-  {"pattern": "/api/v4/projects/12345/issues",          "fixture": "issues_page1.json",         "status": 200},
-  {"pattern": "/api/v4/projects/12345/merge_requests",  "fixture": "merge_requests_page1.json", "status": 200},
-  {"pattern": "/api/v4/projects/12345",                 "fixture": "project_single.json",       "status": 200},
-  {"pattern": "/api/v4/groups/42/projects",             "fixture": "group_projects.json",       "status": 200},
-  {"pattern": "/api/v4/groups/test-group/projects",     "fixture": "group_projects.json",       "status": 200},
-  {"pattern": "/api/v4/groups/42",                      "fixture": "group_single.json",         "status": 200},
-  {"pattern": "/api/v4/groups/test-group",              "fixture": "group_single.json",         "status": 200},
-  {"pattern": "/api/v4/projects?",                      "fixture": "projects_list.json",        "status": 200}
+  {"pattern": "/api/v4/projects/12345/repository/branches",  "fixture": "branches_list.json",        "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/archive.tar.gz",   "fixture": "source_archive.bin",        "status": 200},
+  {"pattern": "/api/v4/projects/12345/wikis",                "fixture": "wiki_pages.json",           "status": 200},
+  {"pattern": "/api/v4/projects/12345/issues",               "fixture": "issues_page1.json",         "status": 200},
+  {"pattern": "/api/v4/projects/12345/merge_requests",       "fixture": "merge_requests_page1.json", "status": 200},
+  {"pattern": "/api/v4/projects/12345",                      "fixture": "project_single.json",       "status": 200},
+  {"pattern": "/api/v4/groups/42/projects",                  "fixture": "group_projects.json",       "status": 200},
+  {"pattern": "/api/v4/groups/test-group/projects",          "fixture": "group_projects.json",       "status": 200},
+  {"pattern": "/api/v4/groups/42",                           "fixture": "group_single.json",         "status": 200},
+  {"pattern": "/api/v4/groups/test-group",                   "fixture": "group_single.json",         "status": 200},
+  {"pattern": "/api/v4/projects?",                           "fixture": "projects_list.json",        "status": 200}
 ]
 EOF
 

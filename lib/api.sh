@@ -30,6 +30,11 @@ api_curl() {
 
     case "$API_LAST_HTTP_CODE" in
       200|201)
+        if [ "${GITLAB_DEBUG:-0}" = "1" ]; then
+          local _size
+          _size=$(wc -c < "$tmp_body" | tr -d ' ')
+          log_debug "Response: HTTP ${API_LAST_HTTP_CODE}, ${_size} bytes"
+        fi
         cat "$tmp_body"
         rm -f "$tmp_body"
         export API_LAST_HTTP_CODE
@@ -103,6 +108,7 @@ api_paginate_all() {
       local count
       count=$(printf '%s' "$response" | jq 'if type == "array" then length else 0 end' 2>/dev/null)
       count="${count:-0}"
+      log_debug "Paginating [page ${page}]: got ${count} item(s)"
 
       printf '%s' "$response" | jq -c '.[]?' 2>/dev/null >> "$out_file"
 
@@ -198,7 +204,15 @@ api_get_project() {
   local project_id="$1"
   local base; base=$(api_base_url)
   log_debug "Fetching project: $project_id"
-  api_curl "${base}/projects/${project_id}"
+  local _result
+  _result=$(api_curl "${base}/projects/${project_id}") || return 1
+  if [ "${GITLAB_DEBUG:-0}" = "1" ] && [ "${HAS_JQ:-0}" = "1" ]; then
+    log_debug "Project: id=$(printf '%s' "$_result" | jq -r '.id') \
+name=$(printf '%s' "$_result" | jq -r '.name') \
+namespace=$(printf '%s' "$_result" | jq -r '.path_with_namespace') \
+default_branch=$(printf '%s' "$_result" | jq -r '.default_branch')"
+  fi
+  printf '%s' "$_result"
 }
 
 api_get_project_wikis() {
@@ -232,7 +246,14 @@ api_get_group() {
   local group_id="$1"
   local base; base=$(api_base_url)
   log_debug "Fetching group: $group_id"
-  api_curl "${base}/groups/${group_id}"
+  local _result
+  _result=$(api_curl "${base}/groups/${group_id}") || return 1
+  if [ "${GITLAB_DEBUG:-0}" = "1" ] && [ "${HAS_JQ:-0}" = "1" ]; then
+    log_debug "Group: id=$(printf '%s' "$_result" | jq -r '.id') \
+name=$(printf '%s' "$_result" | jq -r '.name') \
+path=$(printf '%s' "$_result" | jq -r '.full_path')"
+  fi
+  printf '%s' "$_result"
 }
 
 api_get_group_projects() {
@@ -344,6 +365,71 @@ api_extract_branch_name() {
   fi
 }
 
+# Extract the latest commit SHA (commit.id) from a single branch JSON object.
+# Usage: api_extract_branch_commit_sha <json>
+api_extract_branch_commit_sha() {
+  local json="$1"
+  if [ "${HAS_JQ:-0}" = "1" ]; then
+    printf '%s' "$json" | jq -r '.commit.id // empty' 2>/dev/null
+  else
+    printf '%s' "$json" | grep -o '"id":"[a-f0-9]*"' | head -1 | sed 's/"id":"//;s/"$//'
+  fi
+}
+
+# Fetch a single branch by name for a project.
+# Usage: api_get_project_branch <project_id> <branch_name>
+api_get_project_branch() {
+  local project_id="$1"
+  local branch_name="$2"
+  local base; base=$(api_base_url)
+  local encoded_branch
+  encoded_branch=$(printf '%s' "$branch_name" | sed 's|/|%2F|g')
+  local _result
+  _result=$(api_curl "${base}/projects/${project_id}/repository/branches/${encoded_branch}") || return 1
+  if [ "${GITLAB_DEBUG:-0}" = "1" ] && [ "${HAS_JQ:-0}" = "1" ]; then
+    log_debug "Branch '${branch_name}': HEAD=$(printf '%s' "$_result" | jq -r '.commit.id') \
+\"$(printf '%s' "$_result" | jq -r '.commit.title')\""
+  fi
+  printf '%s' "$_result"
+}
+
+# Fetch the SHA of the most recent (last) commit on a branch.
+# Uses refs/heads/<branch> as the ref to avoid ambiguity with tags of the same name.
+# With jq: sorts by committed_date so the result is correct regardless of API ordering.
+# Usage: api_get_latest_commit_sha <project_id> <branch_name>
+api_get_latest_commit_sha() {
+  local project_id="$1"
+  local branch_name="$2"
+  local base; base=$(api_base_url)
+  local encoded_branch
+  # Use refs/heads/ prefix to unambiguously target the branch, not any same-named tag
+  encoded_branch="refs%2Fheads%2F$(printf '%s' "$branch_name" | sed 's|/|%2F|g')"
+
+  local result
+  result=$(api_curl "${base}/projects/${project_id}/repository/commits?ref_name=${encoded_branch}&per_page=100") || return 1
+
+  if [ "${HAS_JQ:-0}" = "1" ]; then
+    # Sort by committed_date ascending and take the last entry — correct regardless
+    # of whether the API returns commits newest-first or oldest-first.
+    local _latest_json
+    _latest_json=$(printf '%s' "$result" | jq 'sort_by(.committed_date) | last' 2>/dev/null)
+    local _sha _title _date
+    _sha=$(printf '%s' "$_latest_json" | jq -r '.id // empty' 2>/dev/null)
+    if [ "${GITLAB_DEBUG:-0}" = "1" ] && [ -n "$_sha" ]; then
+      _title=$(printf '%s' "$_latest_json" | jq -r '.title // ""' 2>/dev/null)
+      _date=$(printf '%s' "$_latest_json" | jq -r '.committed_date // ""' 2>/dev/null | cut -c1-10)
+      log_debug "Latest commit on '${branch_name}': ${_sha} (${_date}) \"${_title}\""
+    fi
+    printf '%s' "$_sha"
+  else
+    # No jq: grep for all 40-char hex SHAs in "id" fields, take the last match.
+    # GitLab commits JSON lists commit objects each with "id":"<40-char-sha>"; the
+    # last such value is the most recent when the API returns oldest-first (common
+    # in self-hosted instances), and a sort-by-date fallback is not feasible without jq.
+    printf '%s' "$result" | grep -o '"id":"[a-f0-9]\{40\}"' | tail -1 | sed 's/"id":"//;s/"$//'
+  fi
+}
+
 # Fetch all branches for a project; writes one compact JSON object per line to out_file.
 # Usage: api_get_project_branches <project_id> <out_file>
 api_get_project_branches() {
@@ -362,7 +448,7 @@ api_download_archive() {
   local branch="$2"
   local out_file="$3"
   local base; base=$(api_base_url)
-  local url="${base}/projects/${project_id}/repository/archive?format=tar.gz&sha=${branch}"
+  local url="${base}/projects/${project_id}/repository/archive.tar.gz?sha=${branch}"
 
   local auth_header
   auth_header=$(auth_build_header)

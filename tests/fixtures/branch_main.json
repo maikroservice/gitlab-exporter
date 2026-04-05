@@ -1,0 +1,11 @@
+{
+  "name": "main",
+  "default": true,
+  "merged": false,
+  "protected": true,
+  "commit": {
+    "id": "abc1234567890",
+    "short_id": "abc1234",
+    "title": "Latest commit on main"
+  }
+}

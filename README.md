@@ -104,20 +104,20 @@ Scope (optional — omit to run discovery mode):
   --project <url|id|namespace/path>   Export from a single project
   --group   <url|id|namespace/path>   Export from all projects in a group
 
-Content type (default: all three when --project/--group given):
+Content type (default: all when --project/--group given):
   --wiki                Export wiki pages
   --issues              Export issues
   --merge-requests      Export merge requests
   --source              Export default branch as a .tar.gz archive
-  --branches <list>     Export named branches (comma-separated)
-  --all-branches        Export all branches
+  --branches <list>     Export named branches, comma-separated (implies --source)
+  --all-branches        Export all branches (implies --source)
 
 Output:
   --output <dir>        Output directory (default: ./export)
   --force               Overwrite existing files
 
 Options:
-  --state open|closed|all   Issue/MR state filter (default: all)
+  --state opened|closed|all Issue/MR state filter (default: all)
   --list                    Dry run — print what would be exported, write nothing
   --check-scope             Show user identity and token permissions, then exit
   --debug                   Enable verbose debug output
@@ -162,7 +162,7 @@ Options:
 
 ```bash
 ./gitlab-exporter.sh --project mygroup/myproject --wiki --issues
-./gitlab-exporter.sh --project mygroup/myproject --merge-requests --state open
+./gitlab-exporter.sh --project mygroup/myproject --merge-requests --state opened
 ```
 
 ### Export source code
@@ -191,7 +191,7 @@ The `.gitlab-ci.yml` pipeline definition is included in each archive automatical
 ./gitlab-exporter.sh --group myorg
 
 # Issues only, open state
-./gitlab-exporter.sh --group myorg --issues --state open
+./gitlab-exporter.sh --group myorg --issues --state opened
 ```
 
 ### Dry run
@@ -258,7 +258,7 @@ All options can be set in `.env` or `.gitlabrc` (project root or `$HOME`). Copy 
 | `GITLAB_PROJECT` | — | Default project (URL, ID, or path) |
 | `GITLAB_GROUP` | — | Default group (URL, ID, or path) |
 | `GITLAB_OUTPUT_DIR` | `./export` | Output directory |
-| `GITLAB_STATE` | `all` | Issue/MR state filter |
+| `GITLAB_STATE` | `all` | Issue/MR state filter: `all`, `opened`, `closed` |
 | `GITLAB_MAX_RETRIES` | `3` | API retry attempts on transient errors |
 | `GITLAB_RETRY_DELAY` | `5` | Base delay (seconds) between retries |
 | `GITLAB_PER_PAGE` | `100` | Items per API page |

@@ -13,13 +13,16 @@ setup() {
 
   cat > "$_MAP" <<'EOF'
 [
-  {"pattern": "/api/v4/projects/12345/repository/branches",   "fixture": "branches_list.json",  "status": 200},
-  {"pattern": "/api/v4/projects/12345/repository/archive",    "fixture": "source_archive.bin",  "status": 200},
-  {"pattern": "/api/v4/projects/12345/wikis",                 "fixture": "wiki_pages.json",     "status": 200},
-  {"pattern": "/api/v4/projects/12345/issues",                "fixture": "issues_page1.json",   "status": 200},
-  {"pattern": "/api/v4/projects/12345/merge_requests",        "fixture": "merge_requests_page1.json", "status": 200},
-  {"pattern": "/api/v4/projects/12345",                       "fixture": "project_single.json", "status": 200},
-  {"pattern": "/api/v4/projects?",                            "fixture": "projects_list.json",  "status": 200}
+  {"pattern": "/api/v4/projects/12345/repository/commits",          "fixture": "commits_latest.json", "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/branches/staging", "fixture": "branch_staging.json", "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/branches/main",    "fixture": "branch_main.json",    "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/branches",         "fixture": "branches_list.json",  "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/archive.tar.gz",   "fixture": "source_archive.bin",  "status": 200},
+  {"pattern": "/api/v4/projects/12345/wikis",                       "fixture": "wiki_pages.json",     "status": 200},
+  {"pattern": "/api/v4/projects/12345/issues",                      "fixture": "issues_page1.json",   "status": 200},
+  {"pattern": "/api/v4/projects/12345/merge_requests",              "fixture": "merge_requests_page1.json", "status": 200},
+  {"pattern": "/api/v4/projects/12345",                             "fixture": "project_single.json", "status": 200},
+  {"pattern": "/api/v4/projects?",                                  "fixture": "projects_list.json",  "status": 200}
 ]
 EOF
 
@@ -57,21 +60,26 @@ teardown() {
   [ -d "$_OUT_DIR/test-group/my-test-project/source" ]
 }
 
-@test "source export: creates archive file for default branch" {
+@test "source export: creates a directory named after the default branch" {
   "$EXPORT_SCRIPT" --project 12345 --source
-  count=$(find "$_OUT_DIR" -path "*/source/*.tar.gz" | wc -l | tr -d ' ')
+  [ -d "$_OUT_DIR/test-group/my-test-project/source/main" ]
+}
+
+@test "source export: extracted directory contains files" {
+  "$EXPORT_SCRIPT" --project 12345 --source
+  count=$(find "$_OUT_DIR/test-group/my-test-project/source/main" -type f | wc -l | tr -d ' ')
   [ "$count" -ge 1 ]
 }
 
-@test "source export: archive file is named after the default branch" {
+@test "source export: extracted files include README" {
   "$EXPORT_SCRIPT" --project 12345 --source
-  [ -f "$_OUT_DIR/test-group/my-test-project/source/main.tar.gz" ]
+  [ -f "$_OUT_DIR/test-group/my-test-project/source/main/README.md" ]
 }
 
-@test "source export: archive file is non-empty" {
+@test "source export: no tar.gz left behind after extraction" {
   "$EXPORT_SCRIPT" --project 12345 --source
-  size=$(wc -c < "$_OUT_DIR/test-group/my-test-project/source/main.tar.gz" | tr -d ' ')
-  [ "$size" -gt 0 ]
+  count=$(find "$_OUT_DIR" -name "*.tar.gz" | wc -l | tr -d ' ')
+  [ "$count" -eq 0 ]
 }
 
 # --- --branches <list> ---
@@ -81,15 +89,15 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "branches export: creates archive for each named branch" {
+@test "branches export: creates a directory for each named branch" {
   "$EXPORT_SCRIPT" --project 12345 --branches main,staging
-  [ -f "$_OUT_DIR/test-group/my-test-project/source/main.tar.gz" ]
-  [ -f "$_OUT_DIR/test-group/my-test-project/source/staging.tar.gz" ]
+  [ -d "$_OUT_DIR/test-group/my-test-project/source/main" ]
+  [ -d "$_OUT_DIR/test-group/my-test-project/source/staging" ]
 }
 
-@test "branches export: creates two archive files for two named branches" {
+@test "branches export: creates two branch directories for two named branches" {
   "$EXPORT_SCRIPT" --project 12345 --branches main,staging
-  count=$(find "$_OUT_DIR" -path "*/source/*.tar.gz" | wc -l | tr -d ' ')
+  count=$(find "$_OUT_DIR" -path "*/source/*" -type d | wc -l | tr -d ' ')
   [ "$count" -eq 2 ]
 }
 
@@ -100,16 +108,16 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "all-branches export: creates archive for every branch returned by API" {
+@test "all-branches export: creates a directory for every branch returned by API" {
   "$EXPORT_SCRIPT" --project 12345 --all-branches
-  count=$(find "$_OUT_DIR" -path "*/source/*.tar.gz" | wc -l | tr -d ' ')
+  count=$(find "$_OUT_DIR" -path "*/source/*" -type d | wc -l | tr -d ' ')
   [ "$count" -eq 2 ]
 }
 
-@test "all-branches export: archive files are named after branches" {
+@test "all-branches export: directories are named after branches" {
   "$EXPORT_SCRIPT" --project 12345 --all-branches
-  [ -f "$_OUT_DIR/test-group/my-test-project/source/main.tar.gz" ]
-  [ -f "$_OUT_DIR/test-group/my-test-project/source/staging.tar.gz" ]
+  [ -d "$_OUT_DIR/test-group/my-test-project/source/main" ]
+  [ -d "$_OUT_DIR/test-group/my-test-project/source/staging" ]
 }
 
 # --- --list dry run ---
@@ -123,10 +131,10 @@ teardown() {
 
 # --- combined with other content types ---
 
-@test "source + wiki: exports both source archive and wiki files" {
+@test "source + wiki: exports both extracted source and wiki files" {
   "$EXPORT_SCRIPT" --project 12345 --source --wiki
-  archive_count=$(find "$_OUT_DIR" -path "*/source/*.tar.gz" | wc -l | tr -d ' ')
+  source_count=$(find "$_OUT_DIR" -path "*/source/*" -type d | wc -l | tr -d ' ')
   wiki_count=$(find "$_OUT_DIR" -path "*/wiki/*.md" | wc -l | tr -d ' ')
-  [ "$archive_count" -ge 1 ]
+  [ "$source_count" -ge 1 ]
   [ "$wiki_count" -ge 1 ]
 }

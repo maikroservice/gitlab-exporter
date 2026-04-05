@@ -13,6 +13,8 @@ setup() {
 
   cat > "$_MAP" <<'EOF'
 [
+  {"pattern": "/api/v4/projects/12345/repository/branches",         "fixture": "branches_list.json",        "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/archive.tar.gz",          "fixture": "source_archive.bin",        "status": 200},
   {"pattern": "/api/v4/projects/12345/wikis",                       "fixture": "wiki_pages.json",           "status": 200},
   {"pattern": "/api/v4/projects/12345/issues",                      "fixture": "issues_page1.json",         "status": 200},
   {"pattern": "/api/v4/projects/12345/merge_requests",              "fixture": "merge_requests_page1.json", "status": 200},
@@ -143,14 +145,16 @@ teardown() {
 
 # --- all content (default: no content flag) ---
 
-@test "default export: exports wiki, issues, and MRs when no content flag given" {
+@test "default export: exports wiki, issues, MRs, and source when no content flag given" {
   "$EXPORT_SCRIPT" --project 12345
   wiki_count=$(find "$_OUT_DIR" -path "*/wiki/*.md" | wc -l | tr -d ' ')
   issue_count=$(find "$_OUT_DIR" -path "*/issues/*.md" | wc -l | tr -d ' ')
   mr_count=$(find "$_OUT_DIR" -path "*/merge-requests/*.md" | wc -l | tr -d ' ')
+  source_count=$(find "$_OUT_DIR" -path "*/source/*" -type d | wc -l | tr -d ' ')
   [ "$wiki_count" -ge 1 ]
   [ "$issue_count" -ge 1 ]
   [ "$mr_count" -ge 1 ]
+  [ "$source_count" -ge 1 ]
 }
 
 # --- --list dry run ---
@@ -203,4 +207,44 @@ teardown() {
     --project "http://127.0.0.1:${_PORT}/test-group/my-test-project" \
     --wiki
   [ "$status" -eq 0 ]
+}
+
+# --- partial failure: one content type unavailable ---
+
+@test "issues are exported even when wiki returns 404 (wiki disabled)" {
+  # Start a second server where wiki endpoint returns 404 but issues succeed
+  local map2; map2=$(mktemp)
+  cat > "$map2" <<'ROUTEMAP'
+[
+  {"pattern": "/api/v4/projects/12345/wikis",       "fixture": "error_404.json",            "status": 404},
+  {"pattern": "/api/v4/projects/12345/issues",      "fixture": "issues_page1.json",         "status": 200},
+  {"pattern": "/api/v4/projects/12345/merge_requests", "fixture": "merge_requests_page1.json", "status": 200},
+  {"pattern": "/api/v4/projects/12345",             "fixture": "project_single.json",       "status": 200},
+  {"pattern": "/api/v4/projects?",                  "fixture": "projects_list.json",        "status": 200}
+]
+ROUTEMAP
+
+  local port2
+  port2=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
+  FIXTURES_DIR="$FIXTURES_DIR" python3 "$HELPERS_DIR/fixture_server.py" "$port2" "$map2" >/dev/null 2>&1 &
+  local pid2=$!
+
+  local i=0
+  until curl -s "http://127.0.0.1:${port2}/" >/dev/null 2>&1 || [ $i -ge 30 ]; do
+    sleep 0.1; i=$((i+1))
+  done
+
+  GITLAB_URL="http://127.0.0.1:${port2}" run "$EXPORT_SCRIPT" --project 12345
+  kill "$pid2" 2>/dev/null || true; wait "$pid2" 2>/dev/null || true
+  rm -f "$map2"
+
+  # Must exit 0 and must have written issue files
+  [ "$status" -eq 0 ]
+  count=$(find "$_OUT_DIR" -path "*/issues/*.md" | wc -l | tr -d ' ')
+  [ "$count" -ge 1 ]
+}
+
+@test "export output path is logged so user knows where files went" {
+  run "$EXPORT_SCRIPT" --project 12345 --issues
+  [[ "$output" =~ "$_OUT_DIR" ]]
 }

@@ -27,9 +27,12 @@ setup() {
   _MAP=$(mktemp)
   cat > "$_MAP" <<'EOF'
 [
+  {"pattern": "/api/v4/projects/12345/repository/commits",               "fixture": "commits_latest.json",  "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/branches/staging",      "fixture": "branch_staging.json",  "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/branches/main",         "fixture": "branch_main.json",     "status": 200},
   {"pattern": "/api/v4/projects/12345/repository/branches",              "fixture": "branches_list.json",   "status": 200},
-  {"pattern": "/api/v4/projects/12345/repository/archive?format=tar.gz&sha=missing-branch", "fixture": "error_404.json", "status": 404},
-  {"pattern": "/api/v4/projects/12345/repository/archive",               "fixture": "source_archive.bin",   "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/archive.tar.gz?sha=missing-branch", "fixture": "error_404.json", "status": 404},
+  {"pattern": "/api/v4/projects/12345/repository/archive.tar.gz",        "fixture": "source_archive.bin",   "status": 200},
   {"pattern": "/api/v4/projects/12345",                                  "fixture": "project_single.json",  "status": 200},
   {"pattern": "/api/v4/projects?",                                       "fixture": "projects_list.json",   "status": 200}
 ]
@@ -133,4 +136,61 @@ teardown() {
   out="${_TMP_DIR}/missing.tar.gz"
   run api_download_archive "12345" "missing-branch" "$out"
   [ ! -f "$out" ]
+}
+
+# --- api_extract_branch_commit_sha ---
+
+@test "api_extract_branch_commit_sha: returns commit id from branch JSON" {
+  [ "${HAS_JQ}" = "1" ] || skip "jq required"
+  json=$(cat "$FIXTURES_DIR/branch_main.json")
+  result=$(api_extract_branch_commit_sha "$json")
+  [ "$result" = "abc1234567890" ]
+}
+
+@test "api_extract_branch_commit_sha: returns commit id for staging branch" {
+  [ "${HAS_JQ}" = "1" ] || skip "jq required"
+  json=$(cat "$FIXTURES_DIR/branch_staging.json")
+  result=$(api_extract_branch_commit_sha "$json")
+  [ "$result" = "def4567890123" ]
+}
+
+@test "api_extract_branch_commit_sha: returns empty when commit absent" {
+  result=$(api_extract_branch_commit_sha '{"name":"main"}')
+  [ -z "$result" ]
+}
+
+# --- api_get_project_branch ---
+
+@test "api_get_project_branch: returns JSON for existing branch" {
+  [ "${HAS_JQ}" = "1" ] || skip "jq required"
+  result=$(api_get_project_branch "12345" "main")
+  name=$(printf '%s' "$result" | jq -r '.name')
+  [ "$name" = "main" ]
+}
+
+@test "api_get_project_branch: returned JSON contains commit sha" {
+  [ "${HAS_JQ}" = "1" ] || skip "jq required"
+  result=$(api_get_project_branch "12345" "main")
+  sha=$(api_extract_branch_commit_sha "$result")
+  [ "$sha" = "abc1234567890" ]
+}
+
+# --- api_get_latest_commit_sha ---
+
+@test "api_get_latest_commit_sha: returns SHA of the most recent commit, not the initial one" {
+  [ "${HAS_JQ}" = "1" ] || skip "jq required"
+  result=$(api_get_latest_commit_sha "12345" "main")
+  [ "$result" = "dccfa6b3799cc5ecbf13a5889369bd26f8a47b83" ]
+}
+
+@test "api_get_latest_commit_sha: SHA is a full 40-character hex string" {
+  [ "${HAS_JQ}" = "1" ] || skip "jq required"
+  result=$(api_get_latest_commit_sha "12345" "main")
+  printf '%s' "$result" | grep -qE '^[a-f0-9]{40}$'
+}
+
+@test "api_get_latest_commit_sha: does not return the initial (oldest) commit" {
+  [ "${HAS_JQ}" = "1" ] || skip "jq required"
+  result=$(api_get_latest_commit_sha "12345" "main")
+  [ "$result" != "abc1234567890abc1234567890abc1234567890a" ]
 }

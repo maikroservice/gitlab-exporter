@@ -57,7 +57,7 @@ Output:
   --force               Overwrite existing files
 
 Options:
-  --state open|closed|all   Issue/MR state filter (default: all)
+  --state opened|closed|all Issue/MR state filter (default: all)
   --list                    Dry run: print what would be exported
   --check-scope             Show authenticated user and token permissions, then exit
   --debug                   Enable verbose debug output
@@ -119,6 +119,7 @@ if [ "$EXPORT_WIKI" = "0" ] && [ "$EXPORT_ISSUES" = "0" ] && [ "$EXPORT_MRS" = "
   EXPORT_WIKI=1
   EXPORT_ISSUES=1
   EXPORT_MRS=1
+  EXPORT_SOURCE=1
 fi
 
 # ---------------------------------------------------------------------------
@@ -268,15 +269,22 @@ _export_mrs() {
 }
 
 # Resolve the list of branches to download for a project.
-# Outputs one branch name per line.
+# Outputs one "<name>\t<commit_sha>" pair per line.
 # Priority: --branches list > --all-branches > default branch
 _collect_branches() {
   local project_id="$1"
   local project_json="$2"
 
   if [ -n "$BRANCHES_LIST" ]; then
-    # Comma-separated list provided by operator
-    printf '%s' "$BRANCHES_LIST" | tr ',' '\n'
+    # Comma-separated list provided by operator — use commits API to get latest SHA per branch
+    local name sha
+    while IFS= read -r name; do
+      [ -z "$name" ] && continue
+      sha=$(api_get_latest_commit_sha "$project_id" "$name") || sha=""
+      printf '%s\t%s\n' "$name" "${sha:-}"
+    done <<EOF
+$(printf '%s' "$BRANCHES_LIST" | tr ',' '\n')
+EOF
     return 0
   fi
 
@@ -286,21 +294,24 @@ _collect_branches() {
     api_get_project_branches "$project_id" "$branches_file" || { rm -f "$branches_file"; return 1; }
     while IFS= read -r branch_json; do
       [ -z "$branch_json" ] && continue
-      local name
+      local name sha
       name=$(api_extract_branch_name "$branch_json")
-      [ -n "$name" ] && [ "$name" != "null" ] && printf '%s\n' "$name"
+      [ -n "$name" ] && [ "$name" != "null" ] || continue
+      sha=$(api_get_latest_commit_sha "$project_id" "$name") || sha=""
+      printf '%s\t%s\n' "$name" "${sha:-}"
     done < "$branches_file"
     rm -f "$branches_file"
     return 0
   fi
 
   # Default: download the project's default branch
-  local default_branch
+  local default_branch sha
   default_branch=$(api_extract_default_branch "$project_json")
   if [ -z "$default_branch" ] || [ "$default_branch" = "null" ]; then
     default_branch="main"
   fi
-  printf '%s\n' "$default_branch"
+  sha=$(api_get_latest_commit_sha "$project_id" "$default_branch") || sha=""
+  printf '%s\t%s\n' "$default_branch" "${sha:-}"
 }
 
 _export_source() {
@@ -313,7 +324,7 @@ _export_source() {
 
   local source_dir="${GITLAB_OUTPUT_DIR}/${namespace}/source"
 
-  while IFS= read -r branch; do
+  while IFS='	' read -r branch sha; do
     [ -z "$branch" ] && continue
 
     if [ "$LIST_ONLY" = "1" ]; then
@@ -321,14 +332,37 @@ _export_source() {
       continue
     fi
 
+    # Use the explicit commit SHA when available. Fall back to refs/heads/<branch>
+    # (not the bare branch name) so GitLab resolves the branch unambiguously even
+    # when a tag with the same name exists and would otherwise take precedence.
+    local ref
+    if [ -n "$sha" ]; then
+      ref="$sha"
+    else
+      ref="refs/heads/${branch}"
+    fi
+
     mkdir -p "$source_dir"
-    local out_file="${source_dir}/${branch}.tar.gz"
-    api_download_archive "$project_id" "$branch" "$out_file" || {
+    local tmp_archive
+    tmp_archive=$(mktemp /tmp/gitlab-source-XXXXXX.tar.gz)
+    api_download_archive "$project_id" "$ref" "$tmp_archive" || {
       log_warn "Failed to download source for branch: $branch"
+      rm -f "$tmp_archive"
       continue
     }
+
+    local branch_dir="${source_dir}/${branch}"
+    mkdir -p "$branch_dir"
+    if ! tar xzf "$tmp_archive" --strip-components=1 -C "$branch_dir" 2>/dev/null; then
+      log_warn "Failed to extract source archive for branch: $branch"
+      rm -f "$tmp_archive"
+      rm -rf "$branch_dir"
+      continue
+    fi
+    rm -f "$tmp_archive"
+
     _ITEMS_WRITTEN=$((_ITEMS_WRITTEN + 1))
-    log_info "Exported source: $branch → $out_file"
+    log_info "Exported source: $branch (${ref}) → $branch_dir"
   done <<EOF
 $branches
 EOF
@@ -340,10 +374,26 @@ _export_project() {
   local project_json="${3:-}"
 
   log_info "Exporting project: $namespace (id=${project_id})"
-  if [ "$EXPORT_WIKI" = "1" ];   then _export_wiki   "$project_id" "$namespace"; fi
-  if [ "$EXPORT_ISSUES" = "1" ]; then _export_issues "$project_id" "$namespace"; fi
-  if [ "$EXPORT_MRS" = "1" ];    then _export_mrs    "$project_id" "$namespace"; fi
-  if [ "$EXPORT_SOURCE" = "1" ]; then _export_source "$project_id" "$namespace" "$project_json"; fi
+  log_info "Output directory : ${GITLAB_OUTPUT_DIR}/${namespace}"
+
+  # Each content type is attempted independently. A failure (e.g. wiki
+  # disabled → 404) is logged as a warning but does not stop the others.
+  if [ "$EXPORT_WIKI" = "1" ]; then
+    _export_wiki   "$project_id" "$namespace" \
+      || log_warn "Wiki export skipped for $namespace (feature may be disabled)"
+  fi
+  if [ "$EXPORT_ISSUES" = "1" ]; then
+    _export_issues "$project_id" "$namespace" \
+      || log_warn "Issues export failed for $namespace"
+  fi
+  if [ "$EXPORT_MRS" = "1" ]; then
+    _export_mrs    "$project_id" "$namespace" \
+      || log_warn "Merge-request export failed for $namespace"
+  fi
+  if [ "$EXPORT_SOURCE" = "1" ]; then
+    _export_source "$project_id" "$namespace" "$project_json" \
+      || log_warn "Source export failed for $namespace"
+  fi
 }
 
 _run_discovery() {
