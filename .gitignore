@@ -1,0 +1,5 @@
+.env
+.gitlabrc
+export/
+!export/_index.md
+.DS_Store

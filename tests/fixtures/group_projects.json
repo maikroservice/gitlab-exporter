@@ -1,0 +1,9 @@
+[
+  {
+    "id": 12345,
+    "name": "My Test Project",
+    "path": "my-test-project",
+    "path_with_namespace": "test-group/my-test-project",
+    "web_url": "https://gitlab.com/test-group/my-test-project"
+  }
+]

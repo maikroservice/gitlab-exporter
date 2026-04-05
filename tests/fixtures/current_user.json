@@ -1,0 +1,11 @@
+{
+  "id": 1,
+  "username": "testuser",
+  "name": "Test User",
+  "email": "testuser@example.com",
+  "state": "active",
+  "is_admin": false,
+  "can_create_group": true,
+  "can_create_project": true,
+  "web_url": "https://gitlab.com/testuser"
+}

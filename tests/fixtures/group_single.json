@@ -1,0 +1,9 @@
+{
+  "id": 42,
+  "name": "Test Group",
+  "path": "test-group",
+  "full_path": "test-group",
+  "description": "A test group",
+  "visibility": "private",
+  "web_url": "https://gitlab.com/groups/test-group"
+}

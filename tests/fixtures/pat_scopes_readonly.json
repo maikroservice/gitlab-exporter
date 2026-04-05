@@ -1,0 +1,10 @@
+{
+  "id": 101,
+  "name": "readonly-token",
+  "revoked": false,
+  "expires_at": "2027-01-01",
+  "scopes": ["read_api", "read_repository"],
+  "created_at": "2024-01-01T00:00:00.000Z",
+  "active": true,
+  "user_id": 1
+}

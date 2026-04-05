@@ -1,0 +1,19 @@
+[
+  {
+    "id": 2001,
+    "iid": 1,
+    "title": "Add feature X",
+    "description": "Implements the new feature X as described in issue #1.",
+    "state": "merged",
+    "author": {"id": 10, "username": "alice", "name": "Alice Smith"},
+    "assignees": [{"id": 20, "username": "bob", "name": "Bob Jones"}],
+    "labels": ["feature"],
+    "milestone": {"id": 5, "title": "v1.0"},
+    "source_branch": "feature-x",
+    "target_branch": "main",
+    "created_at": "2024-01-12T10:00:00.000Z",
+    "updated_at": "2024-01-19T14:00:00.000Z",
+    "merged_at": "2024-01-19T14:00:00.000Z",
+    "web_url": "https://gitlab.com/test-group/my-test-project/-/merge_requests/1"
+  }
+]

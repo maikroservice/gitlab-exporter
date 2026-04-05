@@ -1,0 +1,11 @@
+{
+  "id": 12345,
+  "name": "My Test Project",
+  "name_with_namespace": "Test Group / My Test Project",
+  "path": "my-test-project",
+  "path_with_namespace": "test-group/my-test-project",
+  "description": "A test project for fixture testing",
+  "visibility": "private",
+  "web_url": "https://gitlab.com/test-group/my-test-project",
+  "default_branch": "main"
+}

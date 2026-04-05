@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1003,
+    "iid": 3,
+    "title": "Update documentation",
+    "description": "The API docs are out of date and need to be refreshed.",
+    "state": "opened",
+    "author": {"id": 10, "username": "alice", "name": "Alice Smith"},
+    "assignees": [],
+    "labels": ["documentation"],
+    "milestone": null,
+    "created_at": "2024-02-01T08:00:00.000Z",
+    "updated_at": "2024-02-05T10:00:00.000Z",
+    "closed_at": null,
+    "web_url": "https://gitlab.com/test-group/my-test-project/-/issues/3"
+  }
+]

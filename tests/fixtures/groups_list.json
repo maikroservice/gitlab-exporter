@@ -1,0 +1,22 @@
+[
+  {
+    "id": 42,
+    "name": "Test Group",
+    "path": "test-group",
+    "full_path": "test-group",
+    "full_name": "Test Group",
+    "description": "A test group for fixture testing",
+    "visibility": "private",
+    "web_url": "https://gitlab.com/groups/test-group"
+  },
+  {
+    "id": 99,
+    "name": "Another Group",
+    "path": "another-group",
+    "full_path": "another-group",
+    "full_name": "Another Group",
+    "description": "Second group",
+    "visibility": "internal",
+    "web_url": "https://gitlab.com/groups/another-group"
+  }
+]

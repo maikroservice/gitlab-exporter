@@ -1,0 +1,14 @@
+[
+  {
+    "content": "# Home\n\nWelcome to the wiki.\n\nThis is the home page with some useful content.",
+    "format": "markdown",
+    "slug": "home",
+    "title": "Home"
+  },
+  {
+    "content": "# Getting Started\n\nFollow these steps to get started with the project.",
+    "format": "markdown",
+    "slug": "getting-started",
+    "title": "Getting Started"
+  }
+]
