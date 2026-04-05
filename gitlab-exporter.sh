@@ -49,6 +49,7 @@ Content type (default: all):
   --issues              Export issues
   --merge-requests      Export merge requests
   --source              Export default branch source archive
+  --commits             Export commit history to _commits.md per branch
   --branches <list>     Export named branches (comma-separated)
   --all-branches        Export all branches
 
@@ -85,6 +86,7 @@ EXPORT_WIKI=0
 EXPORT_ISSUES=0
 EXPORT_MRS=0
 EXPORT_SOURCE=0
+EXPORT_COMMITS=0
 BRANCHES_LIST=""   # comma-separated branch names (--branches)
 ALL_BRANCHES=0     # --all-branches
 OUTPUT_DIR=""
@@ -101,6 +103,7 @@ while [ $# -gt 0 ]; do
     --issues)         EXPORT_ISSUES=1; shift ;;
     --merge-requests) EXPORT_MRS=1;    shift ;;
     --source)         EXPORT_SOURCE=1; shift ;;
+    --commits)        EXPORT_COMMITS=1; shift ;;
     --branches)       EXPORT_SOURCE=1; BRANCHES_LIST="$2"; shift 2 ;;
     --all-branches)   EXPORT_SOURCE=1; ALL_BRANCHES=1; shift ;;
     --output)         OUTPUT_DIR="$2"; shift 2 ;;
@@ -115,11 +118,12 @@ while [ $# -gt 0 ]; do
 done
 
 # Default: export all content types when none specified
-if [ "$EXPORT_WIKI" = "0" ] && [ "$EXPORT_ISSUES" = "0" ] && [ "$EXPORT_MRS" = "0" ] && [ "$EXPORT_SOURCE" = "0" ]; then
+if [ "$EXPORT_WIKI" = "0" ] && [ "$EXPORT_ISSUES" = "0" ] && [ "$EXPORT_MRS" = "0" ] && [ "$EXPORT_SOURCE" = "0" ] && [ "$EXPORT_COMMITS" = "0" ]; then
   EXPORT_WIKI=1
   EXPORT_ISSUES=1
   EXPORT_MRS=1
   EXPORT_SOURCE=1
+  EXPORT_COMMITS=1
 fi
 
 # ---------------------------------------------------------------------------
@@ -368,6 +372,60 @@ $branches
 EOF
 }
 
+_export_commits() {
+  local project_id="$1"
+  local namespace="$2"
+  local project_json="$3"
+
+  local branches
+  branches=$(_collect_branches "$project_id" "$project_json") || return 1
+
+  while IFS='	' read -r branch sha; do
+    [ -z "$branch" ] && continue
+
+    if [ "$LIST_ONLY" = "1" ]; then
+      printf '[commits] %s\n' "$branch"
+      continue
+    fi
+
+    local commits_file
+    commits_file=$(mktemp)
+    api_get_project_commits "$project_id" "$branch" "$commits_file" || {
+      log_warn "Failed to fetch commits for branch: $branch"
+      rm -f "$commits_file"
+      continue
+    }
+
+    local count
+    count=$(wc -l < "$commits_file" | tr -d ' ')
+    if [ "$count" -eq 0 ]; then
+      log_warn "No commits found for branch: $branch"
+      rm -f "$commits_file"
+      continue
+    fi
+
+    local path
+    path=$(output_build_path "$GITLAB_OUTPUT_DIR" "$namespace" "commits" "$branch")
+
+    local tmp_out
+    tmp_out=$(mktemp)
+    printf '# Commits: %s (%s commits)\n\n| SHA | Timestamp | Message | Author |\n|---|---|---|---|\n' \
+      "$branch" "$count" > "$tmp_out"
+    while IFS= read -r commit_json; do
+      [ -z "$commit_json" ] && continue
+      convert_commit_to_markdown "$commit_json" >> "$tmp_out"
+    done < "$commits_file"
+    rm -f "$commits_file"
+
+    output_write_file "$path" "$(cat "$tmp_out")"
+    rm -f "$tmp_out"
+    _ITEMS_WRITTEN=$((_ITEMS_WRITTEN + 1))
+    log_info "Exported commits: $branch (${count} commits) → $path"
+  done <<EOF
+$branches
+EOF
+}
+
 _export_project() {
   local project_id="$1"
   local namespace="$2"
@@ -393,6 +451,10 @@ _export_project() {
   if [ "$EXPORT_SOURCE" = "1" ]; then
     _export_source "$project_id" "$namespace" "$project_json" \
       || log_warn "Source export failed for $namespace"
+  fi
+  if [ "$EXPORT_COMMITS" = "1" ]; then
+    _export_commits "$project_id" "$namespace" "$project_json" \
+      || log_warn "Commits export failed for $namespace"
   fi
 }
 

@@ -430,6 +430,19 @@ api_get_latest_commit_sha() {
   fi
 }
 
+# Fetch all commits for a branch; writes one compact JSON object per line to out_file.
+# Uses refs/heads/<branch> to avoid ambiguity with same-named tags.
+# Usage: api_get_project_commits <project_id> <branch_name> <out_file>
+api_get_project_commits() {
+  local project_id="$1"
+  local branch_name="$2"
+  local out_file="$3"
+  local base; base=$(api_base_url)
+  local encoded_branch
+  encoded_branch="refs%2Fheads%2F$(printf '%s' "$branch_name" | sed 's|/|%2F|g')"
+  api_paginate_all "${base}/projects/${project_id}/repository/commits?ref_name=${encoded_branch}" "$out_file"
+}
+
 # Fetch all branches for a project; writes one compact JSON object per line to out_file.
 # Usage: api_get_project_branches <project_id> <out_file>
 api_get_project_branches() {

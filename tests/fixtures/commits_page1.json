@@ -1,0 +1,28 @@
+[
+  {
+    "id": "dccfa6b3799cc5ecbf13a5889369bd26f8a47b83",
+    "short_id": "dccfa6b3",
+    "title": "Add new feature",
+    "message": "Add new feature\n\nThis adds the widget system.\n",
+    "author_name": "Jane Doe",
+    "author_email": "jane@example.com",
+    "authored_date": "2024-01-15T10:00:00.000Z",
+    "committed_date": "2024-01-15T10:00:00.000Z",
+    "committer_name": "Jane Doe",
+    "committer_email": "jane@example.com",
+    "parent_ids": ["abc1234567890abc1234567890abc1234567890a"]
+  },
+  {
+    "id": "abc1234567890abc1234567890abc1234567890a",
+    "short_id": "abc12345",
+    "title": "Initial commit",
+    "message": "Initial commit\n",
+    "author_name": "John Smith",
+    "author_email": "john@example.com",
+    "authored_date": "2024-01-01T08:00:00.000Z",
+    "committed_date": "2024-01-01T08:00:00.000Z",
+    "committer_name": "John Smith",
+    "committer_email": "john@example.com",
+    "parent_ids": []
+  }
+]

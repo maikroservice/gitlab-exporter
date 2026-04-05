@@ -64,6 +64,29 @@ convert_issue_to_markdown() {
   fi
 }
 
+# Format a single commit JSON object as a Markdown table row.
+# Output: | `short_id` | YYYY-MM-DD HH:MM | message title | author name |
+# Usage: convert_commit_to_markdown <json>
+convert_commit_to_markdown() {
+  local json="$1"
+
+  if [ "${HAS_JQ:-0}" = "1" ]; then
+    local short_id author_name date title
+    short_id=$(printf '%s' "$json" | jq -r '.short_id // ""' 2>/dev/null)
+    author_name=$(printf '%s' "$json" | jq -r '.author_name // ""' 2>/dev/null)
+    date=$(printf '%s' "$json" | jq -r '(.authored_date // "") | gsub("(?<d>[0-9]{4}-[0-9]{2}-[0-9]{2})T(?<t>[0-9]{2}:[0-9]{2}).*"; "\(.d) \(.t)")' 2>/dev/null)
+    title=$(printf '%s' "$json" | jq -r '(.title // .message // "") | split("\n") | .[0]' 2>/dev/null)
+    printf '| `%s` | %s | %s | %s |\n' "$short_id" "$date" "$title" "$author_name"
+  else
+    local short_id author_name title date
+    short_id=$(printf '%s' "$json" | grep -o '"short_id":"[^"]*"' | head -1 | sed 's/"short_id":"//;s/"$//')
+    author_name=$(printf '%s' "$json" | grep -o '"author_name":"[^"]*"' | head -1 | sed 's/"author_name":"//;s/"$//')
+    title=$(printf '%s' "$json" | grep -o '"title":"[^"]*"' | head -1 | sed 's/"title":"//;s/"$//')
+    date=$(printf '%s' "$json" | grep -o '"authored_date":"[^"]*"' | head -1 | sed 's/"authored_date":"//;s/"$//;s/T/ /;s/\.[0-9]*Z$//')
+    printf '| `%s` | %s | %s | %s |\n' "$short_id" "$date" "$title" "$author_name"
+  fi
+}
+
 # Format a merge request JSON object as Markdown.
 # Usage: convert_mr_to_markdown <json>
 convert_mr_to_markdown() {

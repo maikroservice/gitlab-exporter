@@ -13,8 +13,9 @@ setup() {
 
   cat > "$_MAP" <<'EOF'
 [
+  {"pattern": "/api/v4/projects/12345/repository/commits",          "fixture": "commits_page1.json",        "status": 200},
   {"pattern": "/api/v4/projects/12345/repository/branches",         "fixture": "branches_list.json",        "status": 200},
-  {"pattern": "/api/v4/projects/12345/repository/archive.tar.gz",          "fixture": "source_archive.bin",        "status": 200},
+  {"pattern": "/api/v4/projects/12345/repository/archive.tar.gz",   "fixture": "source_archive.bin",        "status": 200},
   {"pattern": "/api/v4/projects/12345/wikis",                       "fixture": "wiki_pages.json",           "status": 200},
   {"pattern": "/api/v4/projects/12345/issues",                      "fixture": "issues_page1.json",         "status": 200},
   {"pattern": "/api/v4/projects/12345/merge_requests",              "fixture": "merge_requests_page1.json", "status": 200},
@@ -145,16 +146,69 @@ teardown() {
 
 # --- all content (default: no content flag) ---
 
-@test "default export: exports wiki, issues, MRs, and source when no content flag given" {
+@test "default export: exports wiki, issues, MRs, source, and commits when no content flag given" {
   "$EXPORT_SCRIPT" --project 12345
   wiki_count=$(find "$_OUT_DIR" -path "*/wiki/*.md" | wc -l | tr -d ' ')
   issue_count=$(find "$_OUT_DIR" -path "*/issues/*.md" | wc -l | tr -d ' ')
   mr_count=$(find "$_OUT_DIR" -path "*/merge-requests/*.md" | wc -l | tr -d ' ')
   source_count=$(find "$_OUT_DIR" -path "*/source/*" -type d | wc -l | tr -d ' ')
+  commits_count=$(find "$_OUT_DIR" -path "*/commits/*.md" | wc -l | tr -d ' ')
   [ "$wiki_count" -ge 1 ]
   [ "$issue_count" -ge 1 ]
   [ "$mr_count" -ge 1 ]
   [ "$source_count" -ge 1 ]
+  [ "$commits_count" -ge 1 ]
+}
+
+# --- commits export ---
+
+@test "commits export: exits 0 for valid project" {
+  run "$EXPORT_SCRIPT" --project 12345 --commits
+  [ "$status" -eq 0 ]
+}
+
+@test "commits export: creates a .md file under commits directory" {
+  "$EXPORT_SCRIPT" --project 12345 --commits
+  count=$(find "$_OUT_DIR" -path "*/commits/*.md" | wc -l | tr -d ' ')
+  [ "$count" -ge 1 ]
+}
+
+@test "commits export: file is named after the branch" {
+  "$EXPORT_SCRIPT" --project 12345 --commits
+  [ -f "$_OUT_DIR/test-group/my-test-project/commits/main.md" ]
+}
+
+@test "commits export: file contains commit short SHA" {
+  "$EXPORT_SCRIPT" --project 12345 --commits
+  grep -q "dccfa6b3" "$_OUT_DIR/test-group/my-test-project/commits/main.md"
+}
+
+@test "commits export: file contains author name" {
+  "$EXPORT_SCRIPT" --project 12345 --commits
+  grep -q "Jane Doe" "$_OUT_DIR/test-group/my-test-project/commits/main.md"
+}
+
+@test "commits export: file contains commit message" {
+  "$EXPORT_SCRIPT" --project 12345 --commits
+  grep -q "Add new feature" "$_OUT_DIR/test-group/my-test-project/commits/main.md"
+}
+
+@test "commits export: file contains header with branch name and count" {
+  "$EXPORT_SCRIPT" --project 12345 --commits
+  grep -q "Commits: main" "$_OUT_DIR/test-group/my-test-project/commits/main.md"
+}
+
+@test "commits export: file is formatted as a Markdown table" {
+  "$EXPORT_SCRIPT" --project 12345 --commits
+  grep -q "| SHA | Timestamp | Message | Author |" "$_OUT_DIR/test-group/my-test-project/commits/main.md"
+  grep -q "| \`dccfa6b3\`" "$_OUT_DIR/test-group/my-test-project/commits/main.md"
+}
+
+@test "commits --list: prints branch names without creating files" {
+  run "$EXPORT_SCRIPT" --project 12345 --commits --list
+  [ "$status" -eq 0 ]
+  count=$(find "$_OUT_DIR" -type f | wc -l | tr -d ' ')
+  [ "$count" -eq 0 ]
 }
 
 # --- --list dry run ---
